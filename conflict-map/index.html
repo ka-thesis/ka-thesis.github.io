@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My map</title>
+<script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://unpkg.com/d3-simple-slider"></script>
+<link rel="stylesheet" type="text/css" href="map.css">
+<style></style>
+</head>
+<body>
+    
+      <div>
+    <div id="slider">
+    
+    <div id="slider-time"></div> 
+        <p id="value-time">2010</p>
+        </div> 
+    <div id="container" class="svg-container">  
+        <h3 id="info"></h3>
+
+  <div class="row align-items-center"> 
+    </div>
+  
+    <script type="text/javascript">
+        
+    //layout
+    var w = 1400;
+    var h = 800;
+    var centered;
+        
+    var svg = d3.select("div#container").append("svg").attr("preserveAspectRatio", "xMinYMin meet")
+    .attr("viewBox", "0 0 " + w + " " + h).style("background","white") //#c9e8fd
+    .classed("svg-content", true);
+    
+    //map settings, choosing projection, specifying the center, scale, and zoom
+    var projection = d3.geoMercator().translate([w/6, 0]).scale(500).center([0,40]);
+    var path = d3.geoPath().projection(projection);
+    
+    //base dataset
+    var worldmap = d3.json("africa_adm0.geojson");
+    var conflicts = d3.csv("99afr.csv");
+    var worldcities = d3.csv("worldcities.csv")
+    
+    //bubble scale
+    var sqrtScale = d3.scaleSqrt()
+        .domain([0, 250])
+        .range([1, 1.5]);
+    
+    
+    //creating map
+    Promise.all([worldmap, conflicts, worldcities]).then(function(values){    //worldmap, conflicts
+    // draw map
+
+    svg.selectAll("path")
+        .data(values[0].features)
+        .enter()
+        .append("path")
+        .attr("class","continent")
+        .attr("d", path)
+        .on("click", clicked);
+                
+    // draw points
+    svg.selectAll("circle")
+        .data(values[1])
+        .enter()
+        .append("circle")
+        .attr("class","circles")
+        .attr("cx", function(d) {return projection([d.Longitude, d.Latitude])[0];})
+        .attr("cy", function(d) {return projection([d.Longitude, d.Latitude])[1];})
+        .attr("fill", function(d) {return clr(d);}) //#3c373d
+        .attr("stroke", "#D3D3D3")
+        .attr("stroke-width", "0.1px")
+        .attr("r", function(d) {
+        if(d["year"] == d3.timeFormat('%Y')(sliderTime.value())) {return sqrtScale(d["deaths_a"] + d["deaths_b"] + d["deaths_civilians"]);}
+        else {return 0;}
+        })
+        .attr("opacity", 0.2)
+        .on("click", function(d) {console.log("hello")})
+        .on("mouseover", function(d) {
+        d3.select(this)
+            .transition()
+            .attr("opacity", .9);
+        d3.select("#info").text("Date: " + d["date_start"].substr(0,10) + " Deaths: " + d["deaths_a"] + " " + d["side_a"] + ", " + d["deaths_b"] + " " + d["side_b"] + " and " + d["deaths_civilians"] + " civilians. Source: " +d["source_article"]);
+        })
+        .on("mouseout", function() {
+        d3.select(this)
+            .transition()
+            .attr("opacity", .2)
+            .attr("r", function(d) {
+                if(d["year"] == d3.timeFormat('%Y')(sliderTime.value())) {return sqrtScale(d["deaths_a"] + d["deaths_b"] + d["deaths_civilians"]);}
+                else {return 0;}})
+        d3.select("h3").text("");
+    });
+    
+    //bubble colour
+    function clr(d) {
+        if(d.type_of_violence ==1) {return "#720000";}
+        if(d.type_of_violence ==2) {return "#084282";}
+        else {return "#9f4c93";}
+    }
+    // display conflict name
+
+    //add labels
+    svg.selectAll("text")
+        .data(values[2])
+        .enter()
+        .append("text")
+		.text(function(d) {
+			   		return d.Name;
+			   })
+		.attr("x", function(d) {return projection([d.Longitude, d.Latitude])[0];})
+		.attr("y", function(d) {return projection([d.Longitude, d.Latitude])[1];})
+		.attr("class","text")
+        .attr("text-align", "center")
+        .style("opacity", 0.2);
+    });
+   
+        
+    //slider scale
+    var dataTime = d3.range(0, 10).map(function(d) {
+    return new Date(2010 + d, 1, 1);
+    });
+    
+    //slider widget    
+    var sliderTime = d3
+    .sliderBottom()
+    .min(d3.min(dataTime))
+    .max(d3.max(dataTime))
+    .step(1000 * 60 * 60 * 24 * 365)
+    .width(300)
+    .tickFormat(d3.timeFormat('%Y'))
+    .tickValues(dataTime)
+    .default(new Date(2010, 1, 1))
+    .on('onchange', val => {
+      d3.select('p#value-time').text(d3.timeFormat('%Y')(val));
+        svg.selectAll("circle").transition().duration(100).attr("r", function(d) {
+        if(d["year"] == d3.timeFormat('%Y')(sliderTime.value())) {return sqrtScale(d["deaths_a"] + d["deaths_b"] + d["deaths_civilians"]);}
+        else {return 0;}
+        });
+    });       
+
+    //year display
+    var gTime = d3
+    .select('div#slider-time')
+    .append('svg')
+    .attr('width', 500)
+    .attr('height', 100)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+    
+    gTime.call(sliderTime);
+    
+    d3.select("h2").text(d3.timeFormat('%Y')(sliderTime.value()));
+    
+    //clickable
+    //svg.on("click", function () {
+    //var mouse = d3.mouse(this);
+    //console.log(mouse);
+    //}); 
+    svg.append("rect")
+    .attr("class", "background")
+    .attr("width", w)
+    .attr("height", h)
+    .on("click", clicked)
+    .style("opacity", 0);
+        
+    function clicked(d) {
+        var x, y, k;
+
+        if (d && centered !== d) {
+        var centroid = path.centroid(d);
+        x = centroid[0];
+        y = centroid[1];
+        k = 4;
+        centered = d;
+        } else {
+        x = w / 2;
+        y = h / 2;
+        k = 1;
+        centered = null;
+        }
+        
+    var j = svg.selectAll("text")
+    var f = svg.selectAll("circle");
+    var g = svg.selectAll("path");
+    
+
+    g.selectAll("path")
+      .classed("active", centered && function(d) { return d === centered; });
+
+    g.transition()
+      .duration(750)
+      .attr("transform", "translate(" + w / 2 + "," + h / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")");
+    
+    
+    f.selectAll("path")
+      .classed("active", centered && function(d) { return d === centered; });
+    
+    f.transition()
+      .duration(750)
+      .attr("transform", "translate(" + w / 2 + "," + h / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")");
+        
+    j.selectAll("path")
+      .classed("active", centered && function(d) { return d === centered; });
+    
+    j.transition()
+      .duration(750)
+      .attr("transform", "translate(" + w / 2 + "," + h / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")");    
+    }
+        
+      
+ 
+    </script>
+
+</body>
+</html>
